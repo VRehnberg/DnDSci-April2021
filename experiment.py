@@ -1,10 +1,12 @@
 ## Imports
 import re
+import itertools
+import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from IPython import display
+from IPython.display import display
 get_ipython().run_line_magic('matplotlib', 'inline')
 
 sns.set_context("talk")
@@ -27,6 +29,27 @@ data["tod"] = 12 * (data["year"] - 1396) + data["month"]
 
 data
 
+## Summaries
+data.describe()
+
+##
+
+strata = ["direction", "month", "year"]
+for r in range(1, len(strata)):
+    for group in itertools.permutations(strata, r):
+        group = list(group)
+        print(" and ".join(group))
+        display(
+            data.groupby(group)["damage taken"].describe()
+        )
+        for encounter in np.unique(data["encounter"].values):
+            print(encounter)
+            fdata = data[data["encounter"]==encounter]
+            display(
+                fdata.groupby(group)["damage taken"].describe()
+            )
+
+
 ## Plot distributions
 sns.displot(
     data,
@@ -39,6 +62,8 @@ sns.displot(
     data,
     x="damage taken",
     row="encounter",
+    col="direction",
+    facet_kws=dict(margin_titles=True),
 )
 
 ## Scatterplot
