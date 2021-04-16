@@ -74,3 +74,40 @@ sns.scatterplot(
     y="damage taken",
     hue="encounter",
 )
+
+## Time series
+
+sns.relplot(
+    data=data,
+    x="tod",
+    y="damage taken",
+    row="encounter",
+    hue="direction",
+    sizes=1,
+    alpha=0.3,
+)
+
+##
+
+sns.relplot(
+    data=data,
+    x="tod",
+    y="damage taken",
+    row="encounter",
+    hue="direction",
+    style="direction",
+    kind="line",
+)
+
+##
+
+sns.relplot(
+    data=data.groupby(["tod", "direction", "encounter"])["damage taken"].describe(),
+    x="tod",
+    y="count",
+    row="encounter",
+    hue="direction",
+    style="direction",
+    kind="line",
+)
+
