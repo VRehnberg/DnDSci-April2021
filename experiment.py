@@ -32,46 +32,10 @@ data
 ## Summaries
 data.describe()
 
-##
-
-strata = ["direction", "month", "year"]
-for r in range(1, len(strata)):
-    for group in itertools.permutations(strata, r):
-        group = list(group)
-        print(" and ".join(group))
-        display(
-            data.groupby(group)["damage taken"].describe()
-        )
-        for encounter in np.unique(data["encounter"].values):
-            print(encounter)
-            fdata = data[data["encounter"]==encounter]
-            display(
-                fdata.groupby(group)["damage taken"].describe()
-            )
-
-
 ## Plot distributions
 sns.displot(
     data,
     x="damage taken",
-    hue="encounter",
-)
-
-## Plot distributions
-sns.displot(
-    data,
-    x="damage taken",
-    row="encounter",
-    col="direction",
-    facet_kws=dict(margin_titles=True),
-)
-
-## Scatterplot
-plt.figure(figsize=[10, 7])
-sns.scatterplot(
-    data=data,
-    x="tod",
-    y="damage taken",
     hue="encounter",
 )
 
@@ -104,6 +68,30 @@ sns.relplot(
 sns.relplot(
     data=data.groupby(["tod", "direction", "encounter"])["damage taken"].describe(),
     x="tod",
+    y="count",
+    row="encounter",
+    hue="direction",
+    style="direction",
+    kind="line",
+)
+
+##
+
+sns.relplot(
+    data=data,
+    x="month",
+    y="damage taken",
+    row="encounter",
+    hue="direction",
+    style="direction",
+    kind="line",
+)
+
+##
+
+sns.relplot(
+    data=data.groupby(["month", "direction", "encounter"])["damage taken"].describe(),
+    x="month",
     y="count",
     row="encounter",
     hue="direction",
