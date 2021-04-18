@@ -1,229 +1,104 @@
-ENCOUNTERS = [
-    "crabmonsters",
-    "kraken",
-    "pirates",
-    "merpeople",
-    "harpy",
-    "elemental",
-    "sharks",
-    "nessie",
-    "whale",
-]
+PARAMETERS = {
+    "counts" : 9,
+    "crabmonsters": 2,
+    "kraken": 2,
+    "pirates": 5,
+    "merpeople": 2,
+    "harpy": 2,
+    "water elemental": 2,
+    "sharks": 2,
+    "nessie": 2,
+    "demon whale": 2,
+}
+
+def log_gamma_parame_prior(a, b):
+    "p(a, µ) \propto (1 / (aµ))"
+    mean = a / b
+    if not (1 <= a <= 1000) or not (0.1 <= mean <= 5):
+        return -np.inf
+    else:
+        return -a - b
+
+def log_uniform_param_prior(start, width):
+    '''p(width) \propto 1 / width'''
+    if not (0 <= start <= 1) or not (0.1 < width <= 1):
+        return -np.inf
+    else:
+        return -width
 
 def log_prior(params):
-    '''Calculates the log prior for the parameters.
+    '''Calculates the log prior for the parameters.'''
 
-    Arguments:
-        params (list): The parameters are [
-            p_counts,
-            (a_crabs, b_crabs),
-            (a_kraken, b_kraken),
-            p_pirates,
-            (a1_pirates, b1_pirates),
-            (a2_pirates, b2_pirates),
-            (a_merpeople, b_merpeople),
-            (a_harpy, b_harpy),
-            (s_elemental, w_elemental),
-            (a_sharks, b_sharks),
-            (a_nessie, b_nessie),
-            (a_whale, b_whale),
-    ]
-    '''
+    # Initialize relevant values
+    names, n_params = zip(*PARAMETERS.items())
+    split_param = np.array_split(params, np.cumsum([n_params]))
+    log_prior = 0.0
 
-    log_prior = 0
+    # Inner priors
+    for name, n, p in zip(names, n_prams, split_params):
+        
+        if (name=="counts"):
+            log_prior += stats.dirichlet(np.ones(n)).logpdf(p)
 
-    (
-        p_counts,
-        (a_crabs, b_crabs),
-        (a_kraken, b_kraken),
-        p_pirates,
-        (a1_pirates, b1_pirates),
-        (a2_pirates, b2_pirates),
-        (a_merpeople, b_merpeople),
-        (a_harpy, b_harpy),
-        (s_elemental, w_elemental),
-        (a_sharks, b_sharks),
-        (a_nessie, b_nessie),
-        (a_whale, b_whale),
-    ) = np.array_split(params, np.cumsum([
-        9, # which encounter
-        2, # gamma crabs
-        2, # gamma kraken
-        1, # which pirates
-        2, # gamma pirates 1
-        2, # gamma pirates 2
-        2, # gamma merpeople
-        2, # gamma harpy
-        2, # flat  water elemental
-        2, # gamma sharks
-        2, # gamma nessie
-        2, # gamma demon whale
-    ])
+        elif (enc=="pirates"):
+            (p_inner, a1, b1, a2, b2) = p
 
-    # Gamma
-    a_gamma = np.array([
-        a_crabs,
-        a_kraken,
-        a1_pirates,
-        a2_pirates,
-        a_merpeople,
-        a_harpy,
-        a_sharks,
-        a_nessie,
-        a_whale,
-    ])
-    b_gamma = np.array([
-        b_crabs,
-        b_kraken,
-        b1_pirates,
-        b2_pirates,
-        b_merpeople,
-        b_harpy,
-        b_sharks,
-        b_nessie,
-        b_whale,
-    ])
-    mean_gamma = a_gamma / b_gamma
+            log_prior += (
+                stats.beta(1, 1).logpdf(p_inner)
+                + log_gamma_param_prior(a1, b1)
+                + log_gamma_param_prior(a2, b2)
+            )
 
-    # Check damage distribution parameter ranges
-    if any(np.reduce.logical_or([
-        (0.1 > a_gamma).any(), (a_gamma > 1000).any(),
-        (0.1 > mean_gamma).any(), (mean_gamma > 5).any(),
-        0 > s_elemental, s_elemental > 1,
-        w_elemental > 1,
-    ])):
-        return -np.inf
+        elif (enc=="water elemental"):
+            (start, width) = p
 
-    # Counts
-    log_prior += stats.dirichlet(np.ones_like(p_counts)).logpdf(p_counts)
-    
-    # Pirate binomial
-    log_prior += stats.beta(1, 1).logpdf(p_pirates)
+            log_prior += log_uniform_param_prior(start, width)
 
-    # Gammas
-    log_prior += np.sum(1 / a_gamma)
-    log_prior += np.sum(1 / mean_gamma)
-
-    # Uniform
-    
+        else:
+            (a, b) = p
+            log_prior += log_gamma_param_prior(a, b)
 
     return log_prior
 
+
 def log_likelihood(damage_data, params):
 
+    # Initialize relevant values
+    names, n_params = zip(*PARAMETERS.items())
+    split_param = np.array_split(params, np.cumsum([n_params]))
     log_like = 0.0
 
-    # Interpret damage_data
-    mask = damage_data["encounter"] == "crabmonsters"
-    data_crabs = damage_data[mask]["damage_taken"].values
+    p_counts = split_param[0] 
 
-    mask = damage_data["encounter"] == "kraken"
-    data_kraken = damage_data[mask]["damage_taken"].values
-
-    mask = damage_data["encounter"] == "pirates"
-    data_pirates = damage_data[mask]["damage_taken"].values
-
-    mask = damage_data["encounter"] == "merpeople"
-    data_merpeople = damage_data[mask]["damage_taken"].values
-
-    mask = damage_data["encounter"] == "harpy"
-    data_harpy = damage_data[mask]["damage_taken"].values
-
-    mask = damage_data["encounter"] == "water elemental"
-    data_elemental = damage_data[mask]["damage_taken"].values
-
-    mask = damage_data["encounter"] == "sharks"
-    data_sharks = damage_data[mask]["damage_taken"].values
-
-    mask = damage_data["encounter"] == "nessie"
-    data_nessie = damage_data[mask]["damage_taken"].values
-
-    mask = damage_data["encounter"] == "demon whale"
-    data_whale = damage_data[mask]["damage_taken"].values
-
-    # Interpret params
-    (
+    for name, p_count, param in zip(
+        names[1:],
         p_counts,
-        (a_crabs, b_crabs),
-        (a_kraken, b_kraken),
-        p_pirates,
-        (a1_pirates, b1_pirates),
-        (a2_pirates, b2_pirates),
-        (a_merpeople, b_merpeople),
-        (a_harpy, b_harpy),
-        (s_elemental, w_elemental),
-        (a_sharks, b_sharks),
-        (a_nessie, b_nessie),
-        (a_whale, b_whale),
-    ) = np.array_split(params, np.cumsum([
-        9, # which encounter
-        2, # gamma crabs
-        2, # gamma kraken
-        1, # which pirates
-        2, # gamma pirates 1
-        2, # gamma pirates 2
-        2, # gamma merpeople
-        2, # gamma harpy
-        2, # flat  water elemental
-        2, # gamma sharks
-        2, # gamma nessie
-        2, # gamma demon whale
-    ])
+        split_params[1:]
+    ):
 
-    (
-        p_crabs,
-        p_kraken,
-        p_pirates,
-        p_merpeople,
-        p_harpy,
-        p_elemental,
-        p_sharks,
-        p_nessie,
-        p_whale,
-    ) = p_counts
+        # Calculate likelihood
+        mask = (damage_data["encounter"]==name)
+        x = damage_data[mask]["damage taken"].values
 
-    #
+        log_like += p_count
 
-    # Crabs
-    x = data_crabs
-    n_x = data_crabs.shape[0]
-    log_like += n_x * p_crabs + stats.gamma(a_crabs, scale=1/b_crabs).logpdf(x)
-    
-    # Kraken
-    x = data_kraken
-    log_like += p_kraken * stats.gamma(a_kraken, scale=1/b_kraken).logpdf(x)
-    
-    # Pirates
-    x = data_pirates
-    log_like += p_pirates * (
-        p_pirates1 * stats.gamma(a_pirates, scale=1/b_pirates).logpdf(x)
+        if (name=="pirates"):
+            (p_inner, a1, b1, a2, b2) = param
+            log_like += (
+                p_inner + stats.gamma(a1, scale=1/b1).logpdf(x)
+                + (1 - p_inner) + stats.gamma(a2, scale=1/b2).logpdf(x)
+            )
 
-    # Merpeople
-    x = data_merpeople
-    log_like += p_merpeople * stats.gamma(a_merpeople, scale=1/b_merpeople).logpdf(x)
+        elif (name=="water elemental"):
+            (s, w) = param
+            log_like += stats.uniform(s, w).logpdf(x)
 
-    # Harpy
-    x = data_harpy
-    log_like += p_harpy * stats.gamma(a_harpy, scale=1/b_harpy).logpdf(x)
+        else:
+            (a, b) = param
+            log_like += stats.gamma(a, b).logpdf(x)
 
-    # Elemental
-    x = data_elemental
-    log_like += p_elemental * stats.uniform(s_elemental, w_elemental).logpdf(x)
+    return log_like
 
-    # Sharks
-    x = data_sharks
-    log_like += p_sharks * stats.gamma(a_sharks, scale=1/b_sharks).logpdf(x)
-
-    # Nessie
-    x = data_nessie
-    log_like += p_nessie * stats.gamma(a_nessie, scale=1/b_nessie).logpdf(x)
-
-    # Whale
-    x = data_whale
-    log_like += p_whale * stats.gamma(a_whale, scale=1/b_whale).logpdf(x)
-
-    
-    
 
 def log_posterior(params, damage_data):
     '''Computes the log posterior of the parameters.'''
