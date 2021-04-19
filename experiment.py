@@ -1,3 +1,5 @@
+# This file is written for jupyter-vim
+
 ## Imports
 import re
 import itertools
@@ -9,23 +11,12 @@ import matplotlib.pyplot as plt
 from IPython.display import display
 get_ipython().run_line_magic('matplotlib', 'inline')
 
+from utils import load_data
+
 sns.set_context("talk")
 
-## Utilities
-def percent2float(string):
-    return float(re.sub("[^0-9]+", "", string)) / 100
-
 ## Load data
-conv = {"damage taken": percent2float}
-data = pd.read_csv("dset.csv", converters=conv)
-data[['month', 'year']] = data.pop('month of departure').str.split(
-    pat='/',
-    n=1,
-    expand=True,
-)
-for k in ["month", "year"]:
-    data[k] = data[k].astype(int)
-data["tod"] = 12 * (data["year"] - 1396) + data["month"]
+data = load_data()
 
 data
 
@@ -69,7 +60,6 @@ vline = lambda *args, **kwargs: plt.axvline(61.5, c="r")
 fgrid.map(vline)
 
 ##
-
 fgrid = sns.relplot(
     data=data.groupby(["tod", "direction", "encounter"])["damage taken"].describe(),
     x="tod",

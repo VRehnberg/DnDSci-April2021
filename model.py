@@ -1,23 +1,8 @@
-from tqdm import tqdm
 import numpy as np
 import pandas as pd
-import itertools
 from scipy import stats, optimize
 
 from utils import load_data
-
-PARAMETERS = {
-    "counts" : 9,
-    "crabmonsters": 2,
-    "kraken": 2,
-    "pirates": 5,
-    "merpeople": 2,
-    "harpy": 2,
-    "water elemental": 2,
-    "sharks": 2,
-    "nessie": 2,
-    "demon whale": 2,
-}
 
 class MixtureModel(stats.rv_continuous):
     '''Weighted mix of rv_continuous models.'''
@@ -285,58 +270,6 @@ class Model():
 
         return damage_taken.values
         
-def exhaustive_search(reps=1000):
-
-    costs = np.array([40, 20, 45, 1, 10, 35, 15])
-
-    model = Model()
-    data = load_data()
-    model.fit(data, verbose=False)
-
-    intervention_space = dict(
-        shark_repellant=(False, True),
-        woodworkers=(False, True),
-        merpeople_tribute=(False, True),
-        extra_oars=range(20),
-        extra_cannons=range(3),
-        arm_crows_nest=(False, True),
-        foam_swords=(False, True),
-    )
-
-    best_results = {}
-    for values in tqdm(
-        itertools.product(*intervention_space.values()),
-        total=np.prod([len(v) for v in intervention_space.values()]),
-    ):
-        interventions = {
-            k: v for k, v in zip(intervention_space, values)
-        }
-
-        values = np.array(values)
-        gold = 100 - np.dot(costs, values)
-
-        damage_taken = model.make_voyage(**interventions, reps=reps)
-        frac_survived = (damage_taken < 1).sum() / len(damage_taken)
-
-        if frac_survived > 0.005:
-            # Increase accuracy
-            damage_taken = model.make_voyage(**interventions, reps=100*reps)
-            frac_survived = (damage_taken < 1).sum() / len(damage_taken)
-            if (
-                gold not in best_results
-                or frac_survived < best_results[gold]["frac_survived"]
-            ):
-                best_results[gold] = dict(
-                    frac_survived=frac_survived,
-                    interventions=interventions,
-                    survival_damage=damage_taken[damage_taken < 1].mean(),
-                )
-                
-                if gold >= 0:
-                    print("\rGold remaining", gold)
-                    print("Survival fraction", frac_survived)
-
-    return best_results
         
         
 
@@ -407,10 +340,3 @@ if __name__=="__main__":
     )
     frac_survived = (damage_taken < 1).sum() / len(damage_taken)
     print(f"All but tribute => survival {frac_survived}")
-
-    # Exhaustive search
-    best_results = exhaustive_search()
-    import pickle
-    with open("best_results.pickle", "wb") as f:
-        pickle.dump(best_results, f)
-    
