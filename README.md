@@ -1,6 +1,8 @@
 # DnDSci: Voyage of the Grey Swan
 This is my attempt at a [problem](https://www.lesswrong.com/posts/S3LKfRtYxhjXyWHgN/d-and-d-sci-april-2021-voyages-of-the-gray-swan) by [abstractapplic](https://www.lesswrong.com/users/abstractapplic).
 
+This README file can be seen as rough log over my process of investigation if read from top to bottom.
+
 ## Initial ideas
  * The dangers that are registered are those that are not always letal.
  * The data probably follows some not too horible distributions, try to fit these distributions to get a model that can be used in MC method.
@@ -37,3 +39,5 @@ Likelihoods:
  * Note: For the unknown encounters the probability is the marginal probability $p(\mathrm{damage} \geq 1)$.
  * Pirates have two gamma with Binomial for which is used for each pirate encounter, these will have to be marginalised.
  
+## Updating probabilistic model
+After constructing the log-posterior for the probabilistic model I found it to be a hassle to sample from it with MCMC. Instead I simplified it so that I now do an MLE for one encounter at the time, with some quite ad hoc extra priors (so kinda a MAP).
