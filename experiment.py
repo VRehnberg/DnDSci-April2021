@@ -41,19 +41,22 @@ sns.displot(
 
 ## Time series
 
-sns.relplot(
+fgrid = sns.relplot(
     data=data,
     x="tod",
     y="damage taken",
     row="encounter",
     hue="direction",
     sizes=1,
-    alpha=0.3,
+    alpha=0.1,
 )
+vline = lambda *args, **kwargs: plt.axvline(61.5, c="r")
+fgrid.map(vline)
+    
 
 ##
 
-sns.relplot(
+fgrid = sns.relplot(
     data=data,
     x="tod",
     y="damage taken",
@@ -62,10 +65,12 @@ sns.relplot(
     style="direction",
     kind="line",
 )
+vline = lambda *args, **kwargs: plt.axvline(61.5, c="r")
+fgrid.map(vline)
 
 ##
 
-sns.relplot(
+fgrid = sns.relplot(
     data=data.groupby(["tod", "direction", "encounter"])["damage taken"].describe(),
     x="tod",
     y="count",
@@ -74,6 +79,8 @@ sns.relplot(
     style="direction",
     kind="line",
 )
+vline = lambda *args, **kwargs: plt.axvline(62.5, c="r")
+fgrid.map(vline)
 
 ##
 
@@ -99,10 +106,21 @@ sns.relplot(
     kind="line",
 )
 
-##
-from scipy import stats
+## Plot distribution
+encounter = "pirates"
+pirate_data = data[data["encounter"]==encounter].copy()
+pirate_data["before threshold"] = pirate_data["tod"] < 62.5
+sns.displot(
+    pirate_data,
+    x="damage taken",
+    hue="before threshold",
+)
 
-class Prior(stats.rv_continuous):
-
-    def _pdf(self, x):
-        return stats.gamma(1, 2).pdf(x) * stats.gamma(1, 2).pdf(x)
+## Plot distribution
+encounter = "demon whale"
+mask = data["encounter"]==encounter
+sns.displot(
+    data[mask],
+    x="damage taken",
+    hue="before threshold",
+)

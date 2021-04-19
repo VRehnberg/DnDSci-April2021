@@ -1,6 +1,7 @@
 import numpy as np
-import emcee
-from scipy import stats
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy import stats, optimize
 
 from utils import load_data
 
@@ -17,173 +18,211 @@ PARAMETERS = {
     "demon whale": 2,
 }
 
+class MixtureModel(stats.rv_continuous):
+    '''Weighted mix of rv_continuous models.'''
 
-def log_gamma_param_prior(a, b):
-    "p(a, µ) \propto (1 / (aµ))"
-    mean = a / b
-    if not (1 <= a <= 1000) or not (0.1 <= mean <= 5):
-        return -np.inf
-    else:
-        return -a - b
+    def __init__(self, submodels, weights, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.submodels = submodels
+        self.weights = weights
 
-def log_uniform_param_prior(start, width):
-    '''p(width) \propto 1 / width'''
-    if not (0 <= start <= 1) or not (0.1 < width <= 1):
-        return -np.inf
-    else:
-        return -width
+    def _pdf(self, x):
+        pdf = sum(
+            weight * submodel.pdf(x)
+            for weight, submodel
+            in zip(self.weights, self.submodels)
+        )
+        return pdf
 
-def log_prior(params):
-    '''Calculates the log prior for the parameters.'''
+    def rvs(self, size):
+        submodel_choices = np.random.choice(
+            len(self.submodels),
+            size=size,
+            p=self.weights,
+        )
+        submodel_samples = [
+            submodel.rvs(size=size)
+            for submodel in self.submodels
+        ]
+        rvs = np.choose(submodel_choices, submodel_samples)
+        return rvs
 
-    # Initialize relevant values
-    names, n_params = zip(*PARAMETERS.items())
-    split_params = np.array_split(params, np.cumsum([n_params]))
-    log_prior = 0.0
+class Model():
+    '''Model for the Grey Swans upcomming journey.'''
 
-    # Inner priors
-    for name, n, p in zip(names, n_params, split_params):
+    def __init__(self):
+        self.submodels = {}
+
+    def fit(self, all_data, verbose=True):
+        '''Rough MLE fit under some assumptions.'''
+
+        expected_counts = {}
+        for encounter, data in all_data.groupby("encounter"):
+
+            if encounter=="unknown":
+                continue
+
+            elif encounter=="pirates":
+                # Pirates is a mix of a Gamma and a normal
+                # also, the distributions changed historically
+                tod_max = max(all_data["tod"].values)
+                tod_threshold = 62.5
+                mask = data["tod"]>tod_threshold
+                x = data[mask]["damage taken"].values
+
+                # Prepare for minimising neg log like
+                p0 = [0.9, 10, 0.2, 0.4, 0.1]
+                fun = lambda p: -np.log(
+                    p[0] * stats.gamma(p[1], scale=p[2]/p[1]).pdf(p)
+                    + (1 - p[0]) * stats.norm(p[3], p[4]).pdf(p)
+                ).sum()
+                bounds = [
+                    (0.01, 0.99),
+                    (1, 1000),
+                    (0.1, 0.3),
+                    (0.3, 0.5),
+                    (0.01, 0.2),
+                ]
+                
+                # Optimization
+                res = optimize.minimize(fun, p0, bounds=bounds)
+                p = res.x
+                
+                # Save model and expected counts
+                self.submodels[encounter] = MixtureModel(
+                    [
+                        stats.gamma(p[1], scale=p[2]/p[1]),
+                        stats.norm(p[3], p[4]),
+                    ],
+                    [p[0], 1 - p[0]], 
+                )
+                expected_count = round(x.size * tod_max / tod_threshold)
+                expected_counts[encounter] = expected_count
+
+                # Estimate num unused data from old distribution
+                pirate_discard = len(data) - expected_count
+
+            elif encounter=="water elemental":
+                # Water elemental is a uniform distribution
+
+                x = data["damage taken"].values
+
+                p = stats.uniform.fit(x)
+                self.submodels[encounter] = stats.uniform(*p)
+                expected_counts[encounter] = len(data)
+
+            else:
+
+                # Rest are Gamma
+                x = data["damage taken"].values
+                n_x = x.size
+            
+                # Setup optimization
+                p0 = (
+                    [5, 0.5]
+                    if not encounter=="crabmonsters"
+                    else [1, 0.5]  # crabmonsters look exponential
+                )
+                fun = lambda p: -(
+                    stats.gamma.logpdf(x, p[0], scale=p[1]/p[0])
+                    - stats.gamma.logcdf(1, p[0], scale=p[1]/p[0])
+                    + stats.norm.logpdf(# "prior" on expected counts
+                        np.log(n_x / stats.gamma.cdf(1, p[0], scale=p[1]/p[0])),
+                        np.log(2421),
+                        np.log(1200),
+                    )
+                ).sum()
+                bounds = [
+                    (1, 1000),
+                    (0.01, 5),
+                ]
+
+                # Optimize
+                res = optimize.minimize(fun, p0, bounds=bounds)
+                p = res.x
+                submodel = stats.gamma(p[0], scale=p[1]/p[0])
+
+                # Save results
+                self.submodels[encounter] = submodel
+                expected_count = round(n_x / submodel.cdf(1))
+                expected_counts[encounter] = expected_count
+
+        # Estimate multinomial parameters (counts)
+        n = int(sum(expected_counts.values()))
+        p = np.array(list(expected_counts.values())) / n
+        self.submodels["counts"] = stats.multinomial(n, p)
+        self.p_counts = p
+
+        if verbose:
+            print(f"Fitting complete.")
+            print(f"Diff. expected vs actual counts ({n - len(all_data)}).")
+            print(f"Pirate discard {pirate_discard}.")
+
+    def sample(self, size):
         
-        if (name=="counts"):
-            if sum(p)!=1.0 or any(p<0.0):
-                return -np.inf
-            log_prior += stats.dirichlet(np.ones(n)).logpdf(p)
+        # Sample encounters
+        p_counts = self.p_counts.copy()
+        counts = stats.multinomial.rvs(
+            size=1,
+            n=size,
+            p=p_counts,
+        ).squeeze()
 
-        elif (name=="pirates"):
-            (p_inner, a1, b1, a2, b2) = p
+        sampled_data = []
 
-            log_prior += (
-                stats.beta(1, 1).logpdf(p_inner)
-                + log_gamma_param_prior(a1, b1)
-                + log_gamma_param_prior(a2, b2)
-            )
+        # Sample damage given encounter
+        for count, (name, model) in zip(counts, self.submodels.items()):
+            
+            if count==0:
+                continue
 
-        elif (name=="water elemental"):
-            (start, width) = p
+            data = pd.DataFrame({
+                "damage taken": model.rvs(count),
+                "encounter": np.full(count, name, dtype=object),
+            })
 
-            log_prior += log_uniform_param_prior(start, width)
+            sampled_data.append(data)
 
-        else:
-            (a, b) = p
-            log_prior += log_gamma_param_prior(a, b)
+        # Join everything together
+        sampled_data = pd.concat(sampled_data)
+        return sampled_data
 
-    return log_prior
+    def pdf(self, x, encounters=None, renormalize=False):
+
+        # None => All possible encounters
+        all_encounters = list(self.submodels)
+        if encounters is None:
+            encounters = all_encounters
+
+        # Select relevant models etc.
+        included = [enc in encounters for enc in all_encounters]
+
+        p_counts = self.p_counts.copy()
+        if renormalize:
+            p_counts = p_counts / p_counts.sum()
+
+        models = [self.submodels[enc] for enc in encounters]
+
+        # Calculate pdf
+        pdf = sum(
+            p_count * model.pdf(x)
+            for p_count, model
+            in zip(p_counts, models)
+        )
+
+        return pdf
 
 
-def log_likelihood(damage_data, params):
-
-    # Interpret relevant values
-    names, n_params = zip(*PARAMETERS.items())
-    split_params = np.array_split(params, np.cumsum([n_params]))
-    p_counts = split_params[0] 
-
-    # Initialize likelihoods
-    log_like = 0.0
-    p_sunk = 0.0
-
-
-    for name, p_count, param in zip(
-        names[1:],
-        p_counts,
-        split_params[1:]
-    ):
-
-        # Calculate likelihood
-        mask = (damage_data["encounter"]==name)
-        x = damage_data[mask]["damage taken"].values
-        n_x = x.shape[0]
-
-        log_like += n_x * p_count
-
-        if (name=="pirates"):
-            # TODO pirates only of time greater than something
-            (p_inner, a1, b1, a2, b2) = param
-            log_like += np.log(
-                p_inner * stats.gamma(a1, scale=1/b1).pdf(x)
-                + (1 - p_inner) * stats.gamma(a2, scale=1/b2).pdf(x)
-            ).sum()
-            p_sunk += p_count * (
-                p_inner * stats.gamma(a1, scale=1/b1).sf(1)
-                + (1 - p_inner) * stats.gamma(a2, scale=1/b2).sf(1)
-            )
-
-        elif (name=="water elemental"):
-            (s, w) = param
-            log_like += stats.uniform(s, w).logpdf(x).sum()
-            p_sunk += p_count * stats.uniform(s, w).sf(1)
-
-        else:
-            (a, b) = param
-            log_like += stats.gamma(a, scale=1/b).logpdf(x).sum()
-            p_sunk += p_count * stats.gamma(a, scale=1/b).sf(1)
-
-    # Sunk
-    mask = (damage_data["encounter"]=="unknown")
-    n_x = sum(mask)
-    log_like += n_x * p_sunk
-
-    return log_like
-
-def log_posterior(params, damage_data):
-    '''Computes the log posterior of the parameters.'''
-
-    log_posterior = 0.0
-
-    log_posterior += log_prior(params)
-    log_posterior += log_likelihood(damage_data, params)
-
-    return log_posterior
 
 if __name__=="__main__":
     
-    # Test log probabilities
-    n = 1
-    test_params = np.hstack([
-        stats.dirichlet(np.ones(9)).rvs(n),
-        np.hstack([
-            (
-                np.random.rand(n, n_par) + 1
-                if name!="water elemental"
-                else np.sort(np.random.rand(n, n_par))
-            ) if name!="pirates"
-            else np.hstack([
-                np.random.rand(n, 1),
-                np.random.rand(n, n_par - 1) + 1,
-            ])
-            for name, n_par in PARAMETERS.items()
-            if name!="counts"
-        ]),
-    ]).T.squeeze()
-
+    
+    model = Model()
     data = load_data()
 
-    print(log_prior(test_params))
-    print(log_likelihood(data, test_params))
-    print(log_posterior(test_params, data))
+    model.fit(data)
 
-    # Try sampling
-    nwalkers = 100
-    ndim = sum(PARAMETERS.values())
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, log_posterior, args=[data])
+    print(model.sample(10))
 
-    n = nwalkers
-    p0 = np.hstack([
-        stats.dirichlet(np.ones(9)).rvs(n),
-        np.hstack([
-            (
-                np.random.rand(n, n_par) + 1
-                if name!="water elemental"
-                else np.sort(np.random.rand(n, n_par))
-            ) if name!="pirates"
-            else np.hstack([
-                np.random.rand(n, 1),
-                np.random.rand(n, n_par - 1) + 1,
-            ])
-            for name, n_par in PARAMETERS.items()
-            if name!="counts"
-        ]),
-    ])
-    n_samples = 100
-#     sampler.run_mcmc(p0, 100)
-
-    
+    x = np.linspace(0, 1.5, 300)
+    print(model.pdf(x).mean())
