@@ -116,11 +116,9 @@ sns.displot(
     hue="before threshold",
 )
 
-## Plot distribution
-encounter = "demon whale"
-mask = data["encounter"]==encounter
+## Plot distributions
 sns.displot(
-    data[mask],
+    data,
     x="damage taken",
-    hue="before threshold",
+    row="encounter",
 )

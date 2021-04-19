@@ -1,6 +1,7 @@
+from tqdm import tqdm
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+import itertools
 from scipy import stats, optimize
 
 from utils import load_data
@@ -48,7 +49,7 @@ class MixtureModel(stats.rv_continuous):
         return rvs
 
 class Model():
-    '''Model for the Grey Swans upcomming journey.'''
+    '''Model for the Grey Swans upcomming voyage.'''
 
     def __init__(self):
         self.submodels = {}
@@ -183,8 +184,11 @@ class Model():
 
             sampled_data.append(data)
 
-        # Join everything together
+        # Join everything together and shuffle
         sampled_data = pd.concat(sampled_data)
+        sampled_data = sampled_data.sample(frac=1)
+        sampled_data.reset_index(inplace=True)
+
         return sampled_data
 
     def pdf(self, x, encounters=None, renormalize=False):
@@ -212,7 +216,129 @@ class Model():
 
         return pdf
 
+    def make_voyage(
+        self, 
+        shark_repellant=False,
+        woodworkers=False,
+        merpeople_tribute=False,
+        extra_oars=0,
+        extra_cannons=0,
+        arm_crows_nest=False,
+        foam_swords=False,
+        reps=1000,
+    ):
 
+        voyages = self.sample(2*10*reps)
+
+        # Removal interventions
+        if shark_repellant:
+            mask = voyages["encounter"]!="sharks"
+            voyages = voyages[mask]
+
+        if merpeople_tribute:
+            mask = voyages["encounter"]!="merpeople"
+            voyages = voyages[mask]
+
+        # Multiplier interventions
+        if woodworkers:
+            mask = voyages["encounter"]=="crabmonsters"
+            mult = np.where(mask, 0.5, 1.0)
+            voyages["damage taken"] = mult * voyages["damage taken"]
+
+        if extra_oars:
+            if not (0 < extra_oars <= 20):
+                raise ValueError(f"extra_oars is {extra_oars}.")
+            mask = np.logical_or(
+                voyages["encounter"]=="kraken",
+                voyages["encounter"]=="demon whale",
+            )
+            mult = 1.0 - np.where(mask, extra_oars * 0.02, 0.0)
+            voyages["damage taken"] = mult * voyages["damage taken"]
+
+        if extra_cannons:
+            if not (0 < extra_cannons <= 3):
+                raise ValueError(f"extra_cannons is {extra_cannons}.")
+            mask = np.logical_or(
+                voyages["encounter"]=="nessie",
+                voyages["encounter"]=="pirates",
+            )
+            mult = 1.0 - np.where(mask, extra_cannons * 0.1, 0.0)
+            voyages["damage taken"] = mult * voyages["damage taken"]
+
+        if arm_crows_nest:
+            mask = voyages["encounter"]=="harpy"
+            mult = np.full(voyages.shape[0], 1.0)
+            mult[mask] = np.random.choice([0, 1], mask.sum(), p=[0.7, 0.3])
+            voyages["damage taken"] = mult * voyages["damage taken"]
+            
+        if foam_swords:
+            mask = voyages["encounter"]=="water elemental"
+            mult = np.where(mask, 0.4, 1.0)
+            voyages["damage taken"] = mult * voyages["damage taken"]
+
+        # Reduce to reps number of voyages
+        voyages = voyages[:10*reps]
+        
+        # Compute damage from all ten voyages
+        damage_taken = voyages.groupby(voyages.index // 10).sum()
+        is_alive = (damage_taken < 1)
+
+        return damage_taken.values
+        
+def exhaustive_search(reps=1000):
+
+    costs = np.array([40, 20, 45, 1, 10, 35, 15])
+
+    model = Model()
+    data = load_data()
+    model.fit(data, verbose=False)
+
+    intervention_space = dict(
+        shark_repellant=(False, True),
+        woodworkers=(False, True),
+        merpeople_tribute=(False, True),
+        extra_oars=range(20),
+        extra_cannons=range(3),
+        arm_crows_nest=(False, True),
+        foam_swords=(False, True),
+    )
+
+    best_results = {}
+    for values in tqdm(
+        itertools.product(*intervention_space.values()),
+        total=np.prod([len(v) for v in intervention_space.values()]),
+    ):
+        interventions = {
+            k: v for k, v in zip(intervention_space, values)
+        }
+
+        values = np.array(values)
+        gold = 100 - np.dot(costs, values)
+
+        damage_taken = model.make_voyage(**interventions, reps=reps)
+        frac_survived = (damage_taken < 1).sum() / len(damage_taken)
+
+        if frac_survived > 0.005:
+            # Increase accuracy
+            damage_taken = model.make_voyage(**interventions, reps=100*reps)
+            frac_survived = (damage_taken < 1).sum() / len(damage_taken)
+            if (
+                gold not in best_results
+                or frac_survived < best_results[gold]["frac_survived"]
+            ):
+                best_results[gold] = dict(
+                    frac_survived=frac_survived,
+                    interventions=interventions,
+                    survival_damage=damage_taken[damage_taken < 1].mean(),
+                )
+                
+                if gold >= 0:
+                    print("\rGold remaining", gold)
+                    print("Survival fraction", frac_survived)
+
+    return best_results
+        
+        
 
 if __name__=="__main__":
     
@@ -226,3 +352,65 @@ if __name__=="__main__":
 
     x = np.linspace(0, 1.5, 300)
     print(model.pdf(x).mean())
+
+    ## Try some simulations
+
+    reps = 10000
+
+    damage_taken = model.make_voyage(reps=reps)
+    frac_survived = (damage_taken < 1).sum() / len(damage_taken)
+    print(f"No interventions => survival {frac_survived}")
+
+    # Sanity check
+    damage_taken = data.groupby(data.index // 10).sum()["damage taken"].values
+    frac_survived = (damage_taken < 1).sum() / len(damage_taken)
+    print(f"Survival fraction from data is {frac_survived}")
+
+    # All interventions
+    damage_taken = model.make_voyage(
+        shark_repellant=True,
+        woodworkers=True,
+        merpeople_tribute=True,
+        extra_oars=20,
+        extra_cannons=3,
+        arm_crows_nest=True,
+        foam_swords=True,
+        reps=reps,
+    )
+    frac_survived = (damage_taken < 1).sum() / len(damage_taken)
+    print(f"All interventions => survival {frac_survived}")
+
+    # All but shark_repellant
+    damage_taken = model.make_voyage(
+        shark_repellant=False,
+        woodworkers=True,
+        merpeople_tribute=True,
+        extra_oars=20,
+        extra_cannons=3,
+        arm_crows_nest=True,
+        foam_swords=True,
+        reps=reps,
+    )
+    frac_survived = (damage_taken < 1).sum() / len(damage_taken)
+    print(f"All but shark_repellant => survival {frac_survived}")
+
+    # All but shark_repellant
+    damage_taken = model.make_voyage(
+        shark_repellant=True,
+        woodworkers=True,
+        merpeople_tribute=False,
+        extra_oars=20,
+        extra_cannons=3,
+        arm_crows_nest=True,
+        foam_swords=True,
+        reps=reps,
+    )
+    frac_survived = (damage_taken < 1).sum() / len(damage_taken)
+    print(f"All but tribute => survival {frac_survived}")
+
+    # Exhaustive search
+    best_results = exhaustive_search()
+    import pickle
+    with open("best_results.pickle", "wb") as f:
+        pickle.dump(best_results, f)
+    
