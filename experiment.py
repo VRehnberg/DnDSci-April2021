@@ -99,3 +99,10 @@ sns.relplot(
     kind="line",
 )
 
+##
+from scipy import stats
+
+class Prior(stats.rv_continuous):
+
+    def _pdf(self, x):
+        return stats.gamma(1, 2).pdf(x) * stats.gamma(1, 2).pdf(x)
