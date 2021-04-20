@@ -41,3 +41,21 @@ Likelihoods:
  
 ## Updating probabilistic model
 After constructing the log-posterior for the probabilistic model I found it to be a hassle to sample from it with MCMC. Instead I simplified it so that I now do an MLE for one encounter at the time, with some quite ad hoc extra priors (so kinda a MAP).
+
+## Submitted comment
+I started by looking at the data and I figured that the distributions probably were quite nice. From looking at the data there seem to be nothing especially weird going on with direction, month or time. There are a few notable things that are a bit less nice than the rest.
+
+Pirates are bimodal and there one of modes are reduced in intensity after approximately 62 weeks. Water elementals are uniform, while most of the rest looks like they could be captured by Gamma distribution. As such I assumed that I could model everything as a Gamma distribution, except pirates that were a Binomial over two Gamma and water elementals that were uniform and then a Multinomial for what encounter.
+
+At first I tried a full Bayesian approach to model for the parameters but MC sampling this got a bit troublesome and I didn't want to put in the time to do it properly. Instead I did a rough MLE estimate were I assumed independence which technically didn't hold as they share the unknown data and I have around 700 data points from the unknown labels that were unallocated. Nevertheless, I now had something I could use to search for the best solution.
+
+Trying it out it doesn't look good, using all the interventions leads to something that has around 3 % chance of surviving the cumulative damage from ten constitutive trips. If this is the case I would try very hard not to go.
+
+The best attempt I found (though the rate was so small so I didn't get a good certainty for this) was to use shark repellant, pay the merpeople a tribute and buy 15 extra oars for the rest of the gold. The result was then
+
+* Chance of survival 0.25 %
+* Average damage on surviving ships 77 %
+* Gold left 0
+
+I haven't checked this though, so there might very well be some bug that gives me wrong results. These interventions were contrary to what I expected at the start. Then I was thinking about how the reduce the certain death encounters and that low and medium risk encounters were good. This intervention seems to be to increase the chance of the smallest risk encounters (even it this increases high risk encounters as well) and hope for the best.
+
