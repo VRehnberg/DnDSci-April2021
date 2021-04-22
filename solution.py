@@ -126,7 +126,7 @@ def main():
 
     plt.show()
     fig.tight_layout()
-    fig.savefig("damage_10_trips.pdf", bbox_inches="tight")
+    fig.savefig("damage_per_trip.pdf", bbox_inches="tight")
     
 
 if __name__=="__main__":

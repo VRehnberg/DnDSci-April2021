@@ -59,3 +59,15 @@ The best attempt I found (though the rate was so small so I didn't get a good ce
 
 I haven't checked this though, so there might very well be some bug that gives me wrong results. These interventions were contrary to what I expected at the start. Then I was thinking about how the reduce the certain death encounters and that low and medium risk encounters were good. This intervention seems to be to increase the chance of the smallest risk encounters (even it this increases high risk encounters as well) and hope for the best.
 
+## Ship is fixed at every stop!
+Apparently I didn't read the instructions properly. The actual results of the model gets best results from buyin
+ * Woodworker weapons
+ * Tribute to seapeople
+ * 20 oars (19 according to model but this is probably from randomness)
+ * 1 cannon
+the results are
+ * 95 % survival for the collection of all ten trips
+ * 41 % damage taken on average per trip
+ * 5 gold remaining
+
+Also, the DM has released his model [here](https://github.com/H-B-P/d-and-d-sci-apr/blob/main/gen.py).
