@@ -27,8 +27,8 @@ def exhaustive_search(reps=1000):
         shark_repellant=(False, True),
         woodworkers=(False, True),
         merpeople_tribute=(False, True),
-        extra_oars=range(20),
-        extra_cannons=range(3),
+        extra_oars=range(20 + 1),
+        extra_cannons=range(3 + 1),
         arm_crows_nest=(False, True),
         foam_swords=(False, True),
     )

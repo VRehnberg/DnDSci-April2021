@@ -63,11 +63,11 @@ I haven't checked this though, so there might very well be some bug that gives m
 Apparently I didn't read the instructions properly. The actual results of the model gets best results from buyin
  * Woodworker weapons
  * Tribute to seapeople
- * 20 oars (19 according to model but this is probably from randomness)
+ * 20 oars
  * 1 cannon
 the results are
  * 95 % survival for the collection of all ten trips
- * 41 % damage taken on average per trip
+ * 41 % damage taken on average per trip were you survive
  * 5 gold remaining
 
 Also, the DM has released his model [here](https://github.com/H-B-P/d-and-d-sci-apr/blob/main/gen.py).
