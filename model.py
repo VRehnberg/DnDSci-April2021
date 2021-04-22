@@ -213,7 +213,8 @@ class Model():
         reps=1000,
     ):
 
-        voyages = self.sample(2*10*reps)
+        # Sample extra as sharks and merpeople are discarded
+        voyages = self.sample(2*reps)
 
         # Removal interventions
         if shark_repellant:
@@ -262,15 +263,9 @@ class Model():
             voyages["damage taken"] = mult * voyages["damage taken"]
 
         # Reduce to reps number of voyages
-        voyages = voyages[:10*reps]
+        voyages = voyages[:reps]
         
-        # Compute damage from all ten voyages
-        damage_taken = voyages.groupby(voyages.index // 10).sum()
-        is_alive = (damage_taken < 1)
-
-        return damage_taken.values
-        
-        
+        return voyages
         
 
 if __name__=="__main__":
@@ -290,12 +285,12 @@ if __name__=="__main__":
 
     reps = 10000
 
-    damage_taken = model.make_voyage(reps=reps)
+    damage_taken = model.make_voyage(reps=reps)["damage taken"].values
     frac_survived = (damage_taken < 1).sum() / len(damage_taken)
     print(f"No interventions => survival {frac_survived}")
 
     # Sanity check
-    damage_taken = data.groupby(data.index // 10).sum()["damage taken"].values
+    damage_taken = data["damage taken"].values
     frac_survived = (damage_taken < 1).sum() / len(damage_taken)
     print(f"Survival fraction from data is {frac_survived}")
 
@@ -309,7 +304,7 @@ if __name__=="__main__":
         arm_crows_nest=True,
         foam_swords=True,
         reps=reps,
-    )
+    )["damage taken"].values
     frac_survived = (damage_taken < 1).sum() / len(damage_taken)
     print(f"All interventions => survival {frac_survived}")
 
@@ -323,7 +318,7 @@ if __name__=="__main__":
         arm_crows_nest=True,
         foam_swords=True,
         reps=reps,
-    )
+    )["damage taken"].values
     frac_survived = (damage_taken < 1).sum() / len(damage_taken)
     print(f"All but shark_repellant => survival {frac_survived}")
 
@@ -337,6 +332,6 @@ if __name__=="__main__":
         arm_crows_nest=True,
         foam_swords=True,
         reps=reps,
-    )
+    )["damage taken"].values
     frac_survived = (damage_taken < 1).sum() / len(damage_taken)
     print(f"All but tribute => survival {frac_survived}")

@@ -8,6 +8,13 @@ from tqdm import tqdm
 from model import Model
 from utils import load_data
 
+def get_survival_rate(voyages):
+    return (voyages["damage taken"] < 1).values.mean()
+
+def get_survival_damage(voyages):
+    survived = voyages[(voyages["damage taken"] < 1)]
+    return survived["damage taken"].values.mean()
+
 def exhaustive_search(reps=1000):
 
     costs = np.array([40, 20, 45, 1, 10, 35, 15])
@@ -38,26 +45,26 @@ def exhaustive_search(reps=1000):
         values = np.array(values)
         gold = 100 - np.dot(costs, values)
 
-        damage_taken = model.make_voyage(**interventions, reps=reps)
-        frac_survived = (damage_taken < 1).sum() / len(damage_taken)
+        voyages = model.make_voyage(**interventions, reps=reps)
+        survival_rate = get_survival_rate(voyages)
 
-        if frac_survived > 0.005:
+        if survival_rate > 0.95:
             # Increase accuracy
-            damage_taken = model.make_voyage(**interventions, reps=100*reps)
-            frac_survived = (damage_taken < 1).sum() / len(damage_taken)
+            voyages = model.make_voyage(**interventions, reps=100*reps)
+            survival_rate = get_survival_rate(voyages)
             if (
                 gold not in best_results
-                or frac_survived < best_results[gold]["frac_survived"]
+                or survival_rate > best_results[gold]["survival_rate"]
             ):
                 best_results[gold] = dict(
-                    frac_survived=frac_survived,
+                    survival_rate=survival_rate,
                     interventions=interventions,
-                    survival_damage=damage_taken[damage_taken < 1].mean(),
+                    survival_damage=get_survival_damage(voyages),
                 )
                 
                 if gold >= 0:
                     print("\rGold remaining", gold)
-                    print("Survival fraction", frac_survived)
+                    print("Survival fraction", survival_rate)
 
     return best_results
 
@@ -72,32 +79,51 @@ def main():
     with open(filename, "rb") as f:
         best_results = pickle.load(f)
 
-    for gold, res in best_results.items():
-        if gold >= 0:
-            print(gold, res["frac_survived"], res["survival_damage"])
-            print(res["interventions"])
+    for k, v in best_results.items():
+        if "frac_survived" in v:
+            v["survival_rate"] = v["frac_survived"]
+         
 
+    fig, ax = plt.subplots()
+    gold = np.array(list(best_results.keys()))
+    survival_rate = [v["survival_rate"] for v in best_results.values()]
+    ax.plot(gold, survival_rate, '.')
+    ax.set_xlabel("Gold remaining")
+    ax.set_ylabel("Survival rate")
+
+    fig.tight_layout()
+    fig.savefig("gold_vs_survival.pdf", bbox_inches="tight")
+
+    i_best = np.argmax(survival_rate - 1000 * (gold < 0))
+    gold_best = gold[i_best]
+    print(f"Best result is achieved by spending {gold_best} gold on")
+    for k, v in best_results[gold_best]["interventions"].items():
+        if v==1:
+            print(k)
+        elif v>1:
+            print(v, k)
 
     # Recalculate best
     model = Model()
     data = load_data()
     model.fit(data)
 
-    damage_taken = model.make_voyage(
-        shark_repellant=True,
+    voyages = model.make_voyage(
         merpeople_tribute=True,
-        extra_oars=15,
-        reps=500000,
+        woodworkers=True,
+        extra_oars=20,  # 19 is probably from randomness
+        extra_cannons=1,
+        reps=1000000,
     )
-    is_survival = (damage_taken<1)
-    print("Frequecy of survial", is_survival.sum() / is_survival.size) 
-    print("Average damage sustained on survivors", damage_taken[is_survival].mean())
-    print("Gold left", 0)
+    print("Frequecy of survial", get_survival_rate(voyages))
+    print("Average damage sustained on survivors", get_survival_damage(voyages))
+    print("Gold left", 5)
 
     fig, ax = plt.subplots()
-    ax.hist(damage_taken, density=True, bins=500)
+    ax.hist(voyages["damage taken"], density=True, bins=500)
     ax.set_xlabel("Damage received from 10 trips")
     ax.set_ylabel("Frequency")
+
     plt.show()
     fig.tight_layout()
     fig.savefig("damage_10_trips.pdf", bbox_inches="tight")
