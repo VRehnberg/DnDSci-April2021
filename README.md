@@ -34,7 +34,7 @@ Prior:
  * Beta(1, 1) for the two pirate distributions.
 
 Likelihoods:
- * Multinomial for count of encounters times $p(\mathrm{damage} \in [0, 1)| \mathrm{encounter})$.
+ * Multinomial for count of encounters times $p(\mathrm{damage} \in \[0, 1)| \mathrm{encounter})$.
  * Gamma for damage received.
  * Note: For the unknown encounters the probability is the marginal probability $p(\mathrm{damage} \geq 1)$.
  * Pirates have two gamma with Binomial for which is used for each pirate encounter, these will have to be marginalised.
@@ -71,3 +71,5 @@ the results are
  * 5 gold remaining
 
 Also, the DM has released his model [here](https://github.com/H-B-P/d-and-d-sci-apr/blob/main/gen.py).
+
+The actual survival rate was 93.28 % which means that my model was a bit optimisitic. This is probably due to the fact that my model missed that the seapeople were actually two different tribes with different damage distributions.
